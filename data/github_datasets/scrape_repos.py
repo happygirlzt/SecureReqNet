@@ -4,22 +4,17 @@ import os
 import subprocess
 import sys
 
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-http = urllib3.PoolManager()
-
-global_num_issues = 0
-
-group_name = sys.argv[1]
-base_url = 'https://github.com/' + group_name
 
 def get_parsed_page(url_requested):
 	page_http = http.request('GET', url_requested)
 	page_html = str(page_http.data.decode('utf-8'))
 	return BeautifulSoup(page_html, 'html.parser')
 
+
 def get_repo_security_labels(repo_url):
 	parsed_labels_html = get_parsed_page(repo_url + '/labels?&q=security')
 	return [element.text.strip() for element in parsed_labels_html.find_all("span", attrs={"class": "label-name"})]
+
 
 def download_issue(repo_name, issue_id, security_related, gt_file, label=None):
 	global group_name
@@ -49,12 +44,14 @@ def download_issue(repo_name, issue_id, security_related, gt_file, label=None):
 
 	global_num_issues += 1
 
+
 def get_num_pages(parsed_html):
 	pages = parsed_html.find("div", attrs={"class": "pagination"})
 	if pages is None:
 		return 1
 	n_pages = int(pages.findChildren("a")[-2].text)
 	return n_pages
+
 
 def download_issues(repo_name, security_labels):
 	global group_name
@@ -137,20 +134,29 @@ def download_issues(repo_name, security_labels):
 	print("Finished downloading {} security issues and {} non-security issues for repo: {}".format(num_security_issues, num_non_security, repo_name))
 	gt_file.close()
 
-n_pages = get_num_pages(get_parsed_page(base_url))
-for page in range(1, n_pages + 1):
-	page_url = base_url + '?page=' + str(page)
-	parsed_page_html = get_parsed_page(page_url)
 
-	repos = [element.text.strip() for element in parsed_page_html.find_all("a", attrs={"itemprop":"name codeRepository"})]
-	for repo in repos:
-		print("Checking repo [{}] for security labels".format(repo))
-		labels = get_repo_security_labels(base_url + '/' + repo)
-		if len(labels) > 0:
-			print("[{}] has labels: {}".format(repo, str(labels)))
-			download_issues(repo, labels)
-			print("Total issues downloaded: {}\n".format(global_num_issues))
-		else:
-			print("[{}] has no security labels\n".format(repo))
+if __name__ == '__main__':
+	urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+	http = urllib3.PoolManager()
 
-print("Final issue download count for ({}): {}".format(group_name, global_num_issues))
+	global_num_issues = 0
+
+	group_name = sys.argv[1]
+	base_url = 'https://github.com/' + group_name
+	n_pages = get_num_pages(get_parsed_page(base_url))
+	for page in range(1, n_pages + 1):
+		page_url = base_url + '?page=' + str(page)
+		parsed_page_html = get_parsed_page(page_url)
+
+		repos = [element.text.strip() for element in parsed_page_html.find_all("a", attrs={"itemprop":"name codeRepository"})]
+		for repo in repos:
+			print("Checking repo [{}] for security labels".format(repo))
+			labels = get_repo_security_labels(base_url + '/' + repo)
+			if len(labels) > 0:
+				print("[{}] has labels: {}".format(repo, str(labels)))
+				download_issues(repo, labels)
+				print("Total issues downloaded: {}\n".format(global_num_issues))
+			else:
+				print("[{}] has no security labels\n".format(repo))
+
+	print("Final issue download count for ({}): {}".format(group_name, global_num_issues))
